@@ -3,6 +3,9 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using ProtectBroker.Infrastructure.Data;
+using ProtectBroker.Infrastructure.Services;
+using ProtectBroker.Api.Hubs;
+using ProtectBroker.Worker.Services;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -77,9 +80,37 @@ try
             ValidateLifetime = true,
             ClockSkew = TimeSpan.Zero
         };
+        
+        // Enable SignalR JWT token from query string
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                if (!string.IsNullOrEmpty(accessToken) &&
+                    (context.HttpContext.WebSockets.IsWebSocketRequest || 
+                     context.Request.Headers.ContainsKey("Upgrade")))
+                {
+                    context.Token = accessToken;
+                }
+                return Task.CompletedTask;
+            }
+        };
     });
 
     builder.Services.AddAuthorization();
+
+    // Register Protect API Configuration
+    var protectConfig = new ProtectApiConfiguration();
+    builder.Configuration.GetSection("UnifiProtect").Bind(protectConfig);
+    builder.Services.AddSingleton(protectConfig);
+
+    // Register Protect API Services
+    builder.Services.AddScoped<IProtectApiClient, ProtectApiClient>();
+    builder.Services.AddSingleton<IProtectWebSocketClient, ProtectWebSocketClient>();
+
+    // Register Background Services
+    builder.Services.AddHostedService<ProtectDeviceSyncService>();
 
     var app = builder.Build();
 
@@ -99,6 +130,9 @@ try
 
     app.MapControllers();
     app.MapHealthChecks("/health");
+    
+    // Map SignalR hubs
+    app.MapHub<DeviceHub>("/signalr/devices");
 
     // Migrate database automatically
     using (var scope = app.Services.CreateScope())
