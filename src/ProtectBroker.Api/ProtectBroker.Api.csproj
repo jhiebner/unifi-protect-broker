@@ -30,6 +30,7 @@
   <ItemGroup>
     <ProjectReference Include="../ProtectBroker.Core/ProtectBroker.Core.csproj" />
     <ProjectReference Include="../ProtectBroker.Infrastructure/ProtectBroker.Infrastructure.csproj" />
+    <ProjectReference Include="../ProtectBroker.Worker/ProtectBroker.Worker.csproj" />
   </ItemGroup>
 
 </Project>
